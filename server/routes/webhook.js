@@ -29,6 +29,7 @@ router.get('/', (req, res) => {
 
 // Incoming messages (POST)
 router.post('/', async (req, res) => {
+  console.log("RAW BODY:", JSON.stringify(req.body));
   console.log('\n➡️ [Webhook] POST request received at /webhook');
   console.log('➡️ [Webhook] Body:', JSON.stringify(req.body, null, 2));
   
