@@ -11,7 +11,7 @@ async function processMessage(userMessage, history, allProducts) {
   let productsContext = "No specific products available right now.";
   if (allProducts && allProducts.length > 0) {
     productsContext = allProducts.map(p => 
-      `Model: ${p.model}, Brand: ${p.brand}, Specs: ${p.processor}, ${p.ram}, ${p.storage}, ${p.screen}, Condition: ${p.condition}, Price: ₹${p.price}, Stock: ${p.stock}`
+      `Name: ${p.name}, Categories: ${p.categories}, Price: ₹${p.price}, Details: ${p.short_description}, Link: ${p.permalink}`
     ).join('\n');
   }
 
@@ -40,6 +40,7 @@ Example: "Mohammad bhai, tumhare liye Dell Latitude 5490 perfect rahega! 💻 i5
 
 STEP 4 - Booking:
 - Agar customer pasand kare, Phone number lo, COD/Online payment method poocho aur confirm karo.
+- When recommending products, ALWAYS include the permalink as: "👉 Product link: [url]"
 
 GENERAL RULES:
 - TONE: Friendly, warm, like a helpful shopkeeper.

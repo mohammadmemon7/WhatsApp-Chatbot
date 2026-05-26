@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Session = require('../models/Session');
 const Product = require('../models/Product');
+const { getLiveProducts } = require('../services/woocommerceService');
 const { processMessage } = require('../services/aiService');
 const { sendTextMessage } = require('../services/whatsappService');
 const { notifyAgent } = require('../services/handoffService');
@@ -87,7 +88,7 @@ router.post('/', async (req, res) => {
 
           // 3. Process with AI
           console.log(`➡️ [Webhook] Calling AI service (groq) for user: ${waId}`);
-          const allProducts = await Product.find({ stock: { $gt: 0 } });
+          const allProducts = await getLiveProducts();
           const formattedHistory = session.history.map(h => ({ role: h.role, content: h.content }));
           const { reply, action } = await processMessage(userText, formattedHistory, allProducts);
           console.log(`➡️ [Webhook] AI response received:`, reply);
