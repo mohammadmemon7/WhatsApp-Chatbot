@@ -33,7 +33,22 @@ app.get('/', (req, res) => {
   res.send('WhatsApp AI Sales Bot Backend is running');
 });
 
+const https = require('https');
+
 // Start Server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+
+  // Keep-alive ping to prevent Render free tier from sleeping
+  const keepAlive = () => {
+    https.get('https://whatsapp-chatbot-tm3g.onrender.com', 
+    (res) => {
+      console.log('Keep-alive ping:', res.statusCode);
+    }).on('error', (err) => {
+      console.log('Ping error:', err.message);
+    });
+  };
+
+  // Ping every 14 minutes
+  setInterval(keepAlive, 14 * 60 * 1000);
 });
