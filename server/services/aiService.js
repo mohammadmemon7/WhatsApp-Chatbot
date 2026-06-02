@@ -212,7 +212,7 @@ ${productsContext}`;
     const response = await axios.post(
       GROQ_URL,
       {
-        model: "llama-3.3-70b-versatile",
+        model: "llama-3.1-8b-instant",
         messages: messages
       },
       {
@@ -239,7 +239,7 @@ ${productsContext}`;
     return { reply: responseText, action: action };
   } catch (error) {
     console.error('Error generating response via Groq:', error.response?.data || error.message);
-    return { reply: "Sorry, mujhe samajh nahi aaya. Kya aap apni query dobara bata sakte hain?", action: 'text' };
+    return { reply: "Sorry, something went wrong on my end. \nPlease try again! 😊", action: 'text' };
   }
 }
 

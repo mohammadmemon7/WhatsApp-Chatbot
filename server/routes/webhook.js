@@ -84,6 +84,16 @@ router.post('/', async (req, res) => {
             continue;
           }
 
+          if (session.history.length === 0) {
+            const welcomeMsg = "Hey! Welcome to MyLaptop 👋\nI'm Raj, your personal laptop guide.\nMay I know your name?";
+            session.history.push({ role: 'user', content: userText });
+            session.history.push({ role: 'assistant', content: welcomeMsg });
+            session.lastActive = new Date();
+            await session.save();
+            await sendTextMessage(waId, welcomeMsg);
+            continue;
+          }
+
           // 2. Add user message to history
           session.history.push({ role: 'user', content: userText });
 

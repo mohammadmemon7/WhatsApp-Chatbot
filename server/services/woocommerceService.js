@@ -35,9 +35,10 @@ async function getLiveProducts() {
             };
         });
 
+        console.log(`Fetched ${products.length} live products from WooCommerce`);
         return products;
     } catch (error) {
-        console.error('Error fetching products from WooCommerce:', error.message);
+        console.error('Exact error fetching products from WooCommerce:', error);
         return [];
     }
 }
