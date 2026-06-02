@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Session = require('../models/Session');
 const Product = require('../models/Product');
-const { getLiveProducts } = require('../services/woocommerceService');
+const { getLiveProducts, searchProducts, getProductsByBudget } = require('../services/woocommerceService');
 const { processMessage } = require('../services/aiService');
 const { sendTextMessage } = require('../services/whatsappService');
 const { notifyAgent } = require('../services/handoffService');
@@ -99,7 +99,30 @@ router.post('/', async (req, res) => {
 
           // 3. Process with AI
           console.log(`➡️ [Webhook] Calling AI service (groq) for user: ${waId}`);
-          const allProducts = await getLiveProducts();
+          
+          let allProducts = [];
+          const userTextLower = userText.toLowerCase();
+          const brands = ['dell', 'hp', 'lenovo', 'asus', 'acer', 'apple', 'macbook', 'thinkpad'];
+
+          const budgetMatch = userTextLower.match(/under\s*(\d+)|below\s*(\d+)k?|(\d+)\s*k|(\d+)\s*hazaar|(\d+)\s*thousand|(\d{2,3})(?:,?000)/);
+
+          if (brands.some(b => userTextLower.includes(b))) {
+              const brand = brands.find(b => userTextLower.includes(b));
+              allProducts = await searchProducts(brand);
+          } else if (budgetMatch) {
+              let budgetStr = budgetMatch[1] || budgetMatch[2] || budgetMatch[3] || budgetMatch[4] || budgetMatch[5] || budgetMatch[6];
+              if (budgetStr) {
+                  let budget = parseInt(budgetStr);
+                  if (budget < 1000) budget *= 1000; 
+                  allProducts = await getProductsByBudget(budget);
+              } else {
+                  allProducts = await getLiveProducts();
+              }
+          } else if (session.history.length <= 4) {
+              allProducts = await getLiveProducts();
+          } else {
+              allProducts = []; 
+          }
           const formattedHistory = session.history.map(h => ({ role: h.role, content: h.content }));
           const { reply, action } = await processMessage(userText, formattedHistory, allProducts);
           console.log(`➡️ [Webhook] AI response received:`, reply);
