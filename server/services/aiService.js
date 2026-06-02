@@ -204,13 +204,13 @@ ${productsContext}`;
 
     const responseText = response.data.choices[0].message.content;
 
-    // Check if handoff or booking intent is present (simple heuristic)
+    // Check if handoff intent is present (simple heuristic)
     let action = 'text';
     if (
       userMessage.toLowerCase().includes('agent') || 
-      userMessage.toLowerCase().includes('human') || 
-      userMessage.toLowerCase().includes('book') || 
-      responseText.toLowerCase().includes('hamari team jald contact')
+      userMessage.toLowerCase().includes('talk to human') || 
+      userMessage.toLowerCase().includes('call me') || 
+      responseText.toLowerCase().includes('our team will contact')
     ) {
       action = 'handoff';
     }

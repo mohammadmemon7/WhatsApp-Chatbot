@@ -73,12 +73,13 @@ router.post('/', async (req, res) => {
           }
 
           if (session.status === 'handed_off') {
-            // Do not process messages if handed off, unless they type 'reset'
             if (userText.toLowerCase() === 'reset') {
               session.status = 'active';
               session.history = [];
               await session.save();
               await sendTextMessage(waId, "Aapka session reset ho gaya hai. Main Raj, kaise help kar sakta hoon?");
+            } else {
+              await sendTextMessage(waId, "Our team will contact you soon!\nIf you have more questions,\ntype 'reset' to start fresh 😊");
             }
             continue;
           }
