@@ -77,7 +77,7 @@ router.post('/', async (req, res) => {
               session.status = 'active';
               session.history = [];
               await session.save();
-              await sendTextMessage(waId, "Aapka session reset ho gaya hai. Main Raj, kaise help kar sakta hoon?");
+              await sendTextMessage(waId, "Session reset! Hey! Welcome to MyLaptop 👋\nI'm Raj, your personal laptop guide.\nMay I know your name?");
             } else {
               await sendTextMessage(waId, "Our team will contact you soon!\nIf you have more questions,\ntype 'reset' to start fresh 😊");
             }
