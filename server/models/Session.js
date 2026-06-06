@@ -8,6 +8,10 @@ const sessionSchema = new mongoose.Schema({
     content: { type: String }
   }],
   status: { type: String, enum: ['active', 'handed_off', 'closed'], default: 'active' },
+  category: { type: String },
+  useCase: { type: String },
+  budgetRange: { type: String },
+  step: { type: Number, default: 1 },
   lastActive: { type: Date, default: Date.now }
 }, {
   timestamps: true

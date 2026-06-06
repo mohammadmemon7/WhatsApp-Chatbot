@@ -4,7 +4,7 @@ const Session = require('../models/Session');
 const Product = require('../models/Product');
 const { getLiveProducts, searchProducts, getProductsByBudget } = require('../services/woocommerceService');
 const { processMessage } = require('../services/aiService');
-const { sendTextMessage } = require('../services/whatsappService');
+const { sendTextMessage, sendInteractiveButtons } = require('../services/whatsappService');
 const { notifyAgent } = require('../services/handoffService');
 const { trimHistory } = require('../utils/sessionManager');
 require('dotenv').config();
@@ -56,13 +56,19 @@ router.post('/', async (req, res) => {
         
         const waId = msg.from;
         
-        // Only handle text messages for now
-        if (msg.type !== 'text') {
-          console.log(`➡️ [Webhook] Ignored non-text message. Type: ${msg.type}`);
+        let userText = '';
+        let buttonId = null;
+
+        if (msg.type === 'text') {
+          userText = msg.text.body;
+        } else if (msg.type === 'interactive' && msg.interactive.type === 'button_reply') {
+          userText = msg.interactive.button_reply.title;
+          buttonId = msg.interactive.button_reply.id;
+        } else {
+          console.log(`➡️ [Webhook] Ignored message type: ${msg.type}`);
           continue;
         }
 
-        const userText = msg.text.body;
         const name = changes.value.contacts?.[0]?.profile?.name || '';
 
         try {
@@ -76,75 +82,176 @@ router.post('/', async (req, res) => {
             if (userText.toLowerCase() === 'reset') {
               session.status = 'active';
               session.history = [];
+              session.step = 1;
               await session.save();
-              await sendTextMessage(waId, "Session reset! Hey! Welcome to MyLaptop 👋\nI'm Raj, your personal laptop guide.\nMay I know your name?");
+              await sendInteractiveButtons(waId, "Welcome to MyLaptop! 👋\nWhat are you looking for?", [
+                { id: "cat_laptops", title: "💻 Refurbished Laptops" },
+                { id: "cat_cctv", title: "📷 CCTV & Security" },
+                { id: "cat_amc", title: "🔧 AMC & Services" }
+              ]);
             } else {
               await sendTextMessage(waId, "Our team will contact you soon!\nIf you have more questions,\ntype 'reset' to start fresh 😊");
             }
             continue;
           }
 
-          if (session.history.length === 0) {
-            const welcomeMsg = "Hey! Welcome to MyLaptop 👋\nI'm Raj, your personal laptop guide.\nMay I know your name?";
-            session.history.push({ role: 'user', content: userText });
-            session.history.push({ role: 'assistant', content: welcomeMsg });
-            session.lastActive = new Date();
+          if (userText.toLowerCase() === 'reset') {
+            session.history = [];
+            session.step = 1;
+            session.category = null;
+            session.useCase = null;
+            session.budgetRange = null;
             await session.save();
-            await sendTextMessage(waId, welcomeMsg);
+            await sendInteractiveButtons(waId, "Welcome to MyLaptop! 👋\nWhat are you looking for?", [
+              { id: "cat_laptops", title: "💻 Refurbished Laptops" },
+              { id: "cat_cctv", title: "📷 CCTV & Security" },
+              { id: "cat_amc", title: "🔧 AMC & Services" }
+            ]);
             continue;
           }
 
-          // 2. Add user message to history
+          // Step 1: Any first message from user
+          if (session.history.length === 0 || session.step === 1) {
+            session.history.push({ role: 'user', content: userText });
+            session.step = 2;
+            session.lastActive = new Date();
+            await session.save();
+            await sendInteractiveButtons(waId, "Welcome to MyLaptop! 👋\nWhat are you looking for?", [
+              { id: "cat_laptops", title: "💻 Refurbished Laptops" },
+              { id: "cat_cctv", title: "📷 CCTV & Security" },
+              { id: "cat_amc", title: "🔧 AMC & Services" }
+            ]);
+            continue;
+          }
+
           session.history.push({ role: 'user', content: userText });
 
-          // 3. Process with AI
-          console.log(`➡️ [Webhook] Calling AI service (groq) for user: ${waId}`);
-          
-          let allProducts = [];
-          const userTextLower = userText.toLowerCase();
-          const brands = ['dell', 'hp', 'lenovo', 'asus', 'acer', 'apple', 'macbook', 'thinkpad'];
+          // Step 2: Handle Category Selection
+          if (session.step === 2) {
+            const lowerText = userText.toLowerCase();
+            if (buttonId === 'cat_laptops' || lowerText.includes('laptop')) {
+              session.category = 'laptops';
+              session.step = 3;
+              await session.save();
+              
+              await sendInteractiveButtons(waId, "Great! Choose your use case:", [
+                { id: "use_study", title: "🎓 Personal/Study" },
+                { id: "use_office", title: "💼 Office Use" },
+                { id: "use_coding", title: "💻 Coding" }
+              ]);
+              
+              // Send second set of buttons after a small delay
+              setTimeout(async () => {
+                await sendInteractiveButtons(waId, "More options:", [
+                  { id: "use_design", title: "🎨 Graphic/Design" },
+                  { id: "use_gaming", title: "🎮 Gaming" }
+                ]);
+              }, 1000);
+              continue;
 
-          const budgetMatch = userTextLower.match(/under\s*(\d+)|below\s*(\d+)k?|(\d+)\s*k|(\d+)\s*hazaar|(\d+)\s*thousand|(\d{2,3})(?:,?000)/);
-
-          if (brands.some(b => userTextLower.includes(b))) {
-              const brand = brands.find(b => userTextLower.includes(b));
-              allProducts = await searchProducts(brand);
-          } else if (budgetMatch) {
-              let budgetStr = budgetMatch[1] || budgetMatch[2] || budgetMatch[3] || budgetMatch[4] || budgetMatch[5] || budgetMatch[6];
-              if (budgetStr) {
-                  let budget = parseInt(budgetStr);
-                  if (budget < 1000) budget *= 1000; 
-                  allProducts = await getProductsByBudget(budget);
-              } else {
-                  allProducts = await getLiveProducts();
-              }
-          } else if (session.history.length <= 4) {
-              allProducts = await getLiveProducts();
-          } else {
-              allProducts = []; 
+            } else if (buttonId === 'cat_cctv' || lowerText.includes('cctv')) {
+              session.category = 'cctv';
+              await session.save();
+              await sendTextMessage(waId, "📞 Please connect with our executive:\n*+91 96196 11144*\nThey will assist you with CCTV & \nSecurity installation! 😊");
+              continue;
+            } else if (buttonId === 'cat_amc' || lowerText.includes('amc')) {
+              session.category = 'amc';
+              await session.save();
+              await sendTextMessage(waId, "📞 Please connect with our executive:\n*+91 96196 11144*\nThey will assist you with AMC & Services! 😊");
+              continue;
+            } else {
+              // Fallback if not matching
+              await sendInteractiveButtons(waId, "Please select an option:", [
+                { id: "cat_laptops", title: "💻 Refurbished Laptops" },
+                { id: "cat_cctv", title: "📷 CCTV & Security" },
+                { id: "cat_amc", title: "🔧 AMC & Services" }
+              ]);
+              continue;
+            }
           }
-          const formattedHistory = session.history.map(h => ({ role: h.role, content: h.content }));
-          const { reply, action } = await processMessage(userText, formattedHistory, allProducts);
-          console.log(`➡️ [Webhook] AI response received:`, reply);
 
-          // 4. Handle actions
-          if (action === 'handoff') {
-            console.log(`➡️ [Webhook] Handoff action triggered for user: ${waId}`);
-            notifyAgent(waId, name, userText);
-            session.status = 'handed_off';
+          // Step 3: Handle Use Case Selection
+          if (session.step === 3 && session.category === 'laptops') {
+            if (buttonId && buttonId.startsWith('use_')) {
+              session.useCase = buttonId.replace('use_', '');
+            } else {
+              session.useCase = userText;
+            }
+            session.step = 4;
+            await session.save();
+            
+            await sendInteractiveButtons(waId, "What's your budget?", [
+              { id: "budget_under_15k", title: "Under ₹15,000" },
+              { id: "budget_15k_25k", title: "₹15,000 - ₹25,000" },
+              { id: "budget_above_25k", title: "Above ₹25,000" }
+            ]);
+            continue;
           }
 
-          // 5. Send reply via WhatsApp
-          console.log(`➡️ [Webhook] Sending reply via WhatsApp to ${waId}...`);
-          await sendTextMessage(waId, reply);
-          console.log(`➡️ [Webhook] Reply sent successfully!`);
+          // Step 4: Handle budget selection and call AI
+          if (session.step === 4 && session.category === 'laptops') {
+            if (buttonId && buttonId.startsWith('budget_')) {
+              session.budgetRange = buttonId.replace('budget_', '');
+            } else {
+              session.budgetRange = userText;
+            }
+            
+            session.step = 5;
+            await session.save();
+            
+            const aiPrompt = `User is looking for a refurbished laptop for ${session.useCase || 'general use'}. Their budget is ${session.budgetRange || 'flexible'}. Please suggest 5-6 relevant products with links.`;
+            
+            console.log(`➡️ [Webhook] Calling AI service for products: ${aiPrompt}`);
+            
+            let maxBudget = null;
+            if (session.budgetRange === 'under_15k') maxBudget = 15000;
+            else if (session.budgetRange === '15k_25k') maxBudget = 25000;
+            
+            let allProducts = [];
+            if (maxBudget) {
+                allProducts = await getProductsByBudget(maxBudget);
+            } else {
+                allProducts = await getLiveProducts();
+            }
 
-          // 6. Add assistant reply to history and trim
-          session.history.push({ role: 'assistant', content: reply });
-          session.history = trimHistory(session.history, 6);
-          session.lastActive = new Date();
+            const formattedHistory = session.history.map(h => ({ role: h.role, content: h.content }));
+            const { reply, action } = await processMessage(aiPrompt, formattedHistory, allProducts);
+            
+            if (action === 'handoff') {
+              notifyAgent(waId, name, userText);
+              session.status = 'handed_off';
+            }
 
-          await session.save();
+            await sendTextMessage(waId, reply);
+            
+            session.history.push({ role: 'assistant', content: reply });
+            session.history = trimHistory(session.history, 6);
+            session.lastActive = new Date();
+            await session.save();
+            continue;
+          }
+
+          // Step 5+: Normal conversation using AI
+          if (session.step >= 5) {
+            console.log(`➡️ [Webhook] Calling AI service for follow-up: ${waId}`);
+            let allProducts = await getLiveProducts();
+            
+            const formattedHistory = session.history.map(h => ({ role: h.role, content: h.content }));
+            const { reply, action } = await processMessage(userText, formattedHistory, allProducts);
+            
+            if (action === 'handoff') {
+              notifyAgent(waId, name, userText);
+              session.status = 'handed_off';
+            }
+            
+            await sendTextMessage(waId, reply);
+            
+            session.history.push({ role: 'assistant', content: reply });
+            session.history = trimHistory(session.history, 6);
+            session.lastActive = new Date();
+            await session.save();
+            continue;
+          }
 
         } catch (err) {
           console.error("Error processing message:", err);

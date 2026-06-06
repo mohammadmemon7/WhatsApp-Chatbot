@@ -35,6 +35,47 @@ async function sendTextMessage(to, text) {
   }
 }
 
+/**
+ * Send an interactive buttons message via WhatsApp API
+ * @param {string} to - WhatsApp number
+ * @param {string} text - Message body text
+ * @param {Array} buttons - Array of button objects [{ id: "btn_id", title: "Button Title" }]
+ */
+async function sendInteractiveButtons(to, text, buttons) {
+  try {
+    const response = await axios.post(
+      API_URL,
+      {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: to,
+        type: "interactive",
+        interactive: {
+          type: "button",
+          body: { text: text },
+          action: {
+            buttons: buttons.map(btn => ({
+              type: "reply",
+              reply: { id: btn.id, title: btn.title }
+            }))
+          }
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${META_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error sending interactive buttons:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+}
+
 module.exports = {
-  sendTextMessage
+  sendTextMessage,
+  sendInteractiveButtons
 };
