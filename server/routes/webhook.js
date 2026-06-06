@@ -83,31 +83,21 @@ router.post('/', async (req, res) => {
               session.status = 'active';
               session.history = [];
               session.step = 1;
+              session.category = null;
+              session.useCase = null;
+              session.budgetRange = null;
               await session.save();
-              await sendInteractiveButtons(waId, "Welcome to MyLaptop! 👋\nWhat are you looking for?", [
-                { id: "cat_laptops", title: "💻 Laptops" },
-                { id: "cat_cctv", title: "📷 CCTV & Security" },
-                { id: "cat_amc", title: "🔧 AMC & Services" }
-              ]);
             } else {
               await sendTextMessage(waId, "Our team will contact you soon!\nIf you have more questions,\ntype 'reset' to start fresh 😊");
+              continue;
             }
-            continue;
-          }
-
-          if (userText.toLowerCase() === 'reset') {
+          } else if (userText.toLowerCase() === 'reset') {
             session.history = [];
             session.step = 1;
             session.category = null;
             session.useCase = null;
             session.budgetRange = null;
             await session.save();
-            await sendInteractiveButtons(waId, "Welcome to MyLaptop! 👋\nWhat are you looking for?", [
-              { id: "cat_laptops", title: "💻 Laptops" },
-              { id: "cat_cctv", title: "📷 CCTV & Security" },
-              { id: "cat_amc", title: "🔧 AMC & Services" }
-            ]);
-            continue;
           }
 
           // Step 1: Any first message from user
@@ -150,11 +140,13 @@ router.post('/', async (req, res) => {
               continue;
 
             } else if (buttonId === 'cat_cctv' || lowerText.includes('cctv')) {
+              session.step = 99;
               session.category = 'cctv';
               await session.save();
               await sendTextMessage(waId, "📞 Please connect with our executive:\n*+91 96196 11144*\nThey will assist you with CCTV & \nSecurity installation! 😊");
               continue;
             } else if (buttonId === 'cat_amc' || lowerText.includes('amc')) {
+              session.step = 99;
               session.category = 'amc';
               await session.save();
               await sendTextMessage(waId, "📞 Please connect with our executive:\n*+91 96196 11144*\nThey will assist you with AMC & Services! 😊");
