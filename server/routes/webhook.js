@@ -85,7 +85,7 @@ router.post('/', async (req, res) => {
               session.step = 1;
               await session.save();
               await sendInteractiveButtons(waId, "Welcome to MyLaptop! 👋\nWhat are you looking for?", [
-                { id: "cat_laptops", title: "💻 Refurbished Laptops" },
+                { id: "cat_laptops", title: "💻 Laptops" },
                 { id: "cat_cctv", title: "📷 CCTV & Security" },
                 { id: "cat_amc", title: "🔧 AMC & Services" }
               ]);
@@ -103,7 +103,7 @@ router.post('/', async (req, res) => {
             session.budgetRange = null;
             await session.save();
             await sendInteractiveButtons(waId, "Welcome to MyLaptop! 👋\nWhat are you looking for?", [
-              { id: "cat_laptops", title: "💻 Refurbished Laptops" },
+              { id: "cat_laptops", title: "💻 Laptops" },
               { id: "cat_cctv", title: "📷 CCTV & Security" },
               { id: "cat_amc", title: "🔧 AMC & Services" }
             ]);
@@ -117,7 +117,7 @@ router.post('/', async (req, res) => {
             session.lastActive = new Date();
             await session.save();
             await sendInteractiveButtons(waId, "Welcome to MyLaptop! 👋\nWhat are you looking for?", [
-              { id: "cat_laptops", title: "💻 Refurbished Laptops" },
+              { id: "cat_laptops", title: "💻 Laptops" },
               { id: "cat_cctv", title: "📷 CCTV & Security" },
               { id: "cat_amc", title: "🔧 AMC & Services" }
             ]);
@@ -162,7 +162,7 @@ router.post('/', async (req, res) => {
             } else {
               // Fallback if not matching
               await sendInteractiveButtons(waId, "Please select an option:", [
-                { id: "cat_laptops", title: "💻 Refurbished Laptops" },
+                { id: "cat_laptops", title: "💻 Laptops" },
                 { id: "cat_cctv", title: "📷 CCTV & Security" },
                 { id: "cat_amc", title: "🔧 AMC & Services" }
               ]);
@@ -182,7 +182,7 @@ router.post('/', async (req, res) => {
             
             await sendInteractiveButtons(waId, "What's your budget?", [
               { id: "budget_under_15k", title: "Under ₹15,000" },
-              { id: "budget_15k_25k", title: "₹15,000 - ₹25,000" },
+              { id: "budget_15k_25k", title: "₹15k - ₹25k" },
               { id: "budget_above_25k", title: "Above ₹25,000" }
             ]);
             continue;
