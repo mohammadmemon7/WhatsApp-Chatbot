@@ -173,8 +173,8 @@ router.post('/', async (req, res) => {
             await session.save();
             
             await sendInteractiveButtons(waId, "What's your budget?", [
-              { id: "budget_under_15k", title: "Under ₹15,000" },
-              { id: "budget_15k_25k", title: "₹15k - ₹25k" },
+              { id: "budget_under_20k", title: "Under ₹20,000" },
+              { id: "budget_20k_25k", title: "₹20k - ₹25k" },
               { id: "budget_above_25k", title: "Above ₹25,000" }
             ]);
             continue;
@@ -196,8 +196,8 @@ router.post('/', async (req, res) => {
             console.log(`➡️ [Webhook] Calling AI service for products: ${aiPrompt}`);
             
             let maxBudget = null;
-            if (session.budgetRange === 'under_15k') maxBudget = 15000;
-            else if (session.budgetRange === '15k_25k') maxBudget = 25000;
+            if (session.budgetRange === 'under_20k') maxBudget = 20000;
+            else if (session.budgetRange === '20k_25k') maxBudget = 25000;
             
             let allProducts = [];
             if (maxBudget) {
