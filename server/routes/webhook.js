@@ -142,7 +142,7 @@ router.post('/', async (req, res) => {
               
               // Send second set of buttons after a small delay
               setTimeout(async () => {
-                await sendInteractiveButtons(waId, "More options:", [
+                await sendInteractiveButtons(waId, "More use cases:", [
                   { id: "use_design", title: "🎨 Graphic/Design" },
                   { id: "use_gaming", title: "🎮 Gaming" }
                 ]);
