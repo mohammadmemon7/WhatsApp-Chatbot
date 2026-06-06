@@ -116,6 +116,16 @@ router.post('/', async (req, res) => {
 
           session.history.push({ role: 'user', content: userText });
 
+          // Step 99: Conversation ended (CCTV/AMC selected)
+          if (session.step === 99) {
+            await sendTextMessage(waId, 
+              "For further assistance, please contact:\n" +
+              "📞 *+91 96196 11144*\n\n" +
+              "Type 'reset' to start over 😊"
+            );
+            continue;
+          }
+
           // Step 2: Handle Category Selection
           if (session.step === 2) {
             const lowerText = userText.toLowerCase();
