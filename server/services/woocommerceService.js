@@ -10,7 +10,7 @@ function stripHtml(html) {
     return html.replace(/<[^>]*>?/gm, '').trim();
 }
 
-async function getLiveProducts() {
+async function getLiveProducts(page = 1) {
     try {
         const response = await axios.get(BASE_URL, {
             params: {
@@ -18,7 +18,8 @@ async function getLiveProducts() {
                 consumer_secret: WC_CONSUMER_SECRET,
                 status: 'publish',
                 stock_status: 'instock',
-                per_page: 6 // Fetch top 6 products
+                per_page: 6,
+                page: page
             }
         });
 
@@ -73,18 +74,20 @@ async function searchProducts(query) {
     }
 }
 
-async function getProductsByBudget(maxBudget) {
+async function getProductsByBudget(minBudget, maxBudget, page = 1) {
     try {
-        const response = await axios.get(BASE_URL, {
-            params: {
-                consumer_key: WC_CONSUMER_KEY,
-                consumer_secret: WC_CONSUMER_SECRET,
-                status: 'publish',
-                stock_status: 'instock',
-                max_price: maxBudget,
-                per_page: 6
-            }
-        });
+        const params = {
+            consumer_key: WC_CONSUMER_KEY,
+            consumer_secret: WC_CONSUMER_SECRET,
+            status: 'publish',
+            stock_status: 'instock',
+            per_page: 6,
+            page: page
+        };
+        if (maxBudget) params.max_price = maxBudget;
+        if (minBudget) params.min_price = minBudget;
+
+        const response = await axios.get(BASE_URL, { params });
 
         return response.data.map(product => {
             const price = product.sale_price || product.regular_price || product.price;

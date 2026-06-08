@@ -118,12 +118,23 @@ router.post('/', async (req, res) => {
 
           // Step 99: Conversation ended (CCTV/AMC selected)
           if (session.step === 99) {
-            await sendTextMessage(waId, 
-              "For further assistance, please contact:\n" +
-              "📞 *+91 96196 11144*\n\n" +
-              "Type 'reset' to start over 😊"
-            );
-            continue;
+            // If user clicked a new category button, 
+            // reset and let them continue
+            if (buttonId && buttonId.startsWith('cat_')) {
+              session.step = 2;
+              session.category = null;
+              session.useCase = null;
+              session.budgetRange = null;
+              await session.save();
+              // Don't continue, fall through to step 2
+            } else {
+              await sendTextMessage(waId, 
+                "For further assistance, please contact:\n" +
+                "📞 *+91 96196 11144*\n\n" +
+                "Type 'reset' to start over 😊"
+              );
+              continue;
+            }
           }
 
           // Step 2: Handle Category Selection
@@ -206,14 +217,16 @@ router.post('/', async (req, res) => {
             console.log(`➡️ [Webhook] Calling AI service for products: ${aiPrompt}`);
             
             let maxBudget = null;
+            let minBudget = null;
             if (session.budgetRange === 'under_20k') maxBudget = 20000;
-            else if (session.budgetRange === '20k_25k') maxBudget = 25000;
+            else if (session.budgetRange === '20k_25k') { minBudget = 20000; maxBudget = 25000; }
+            else if (session.budgetRange === 'above_25k') minBudget = 25000;
             
             let allProducts = [];
-            if (maxBudget) {
-                allProducts = await getProductsByBudget(maxBudget);
+            if (maxBudget || minBudget) {
+                allProducts = await getProductsByBudget(minBudget, maxBudget, session.page || 1);
             } else {
-                allProducts = await getLiveProducts();
+                allProducts = await getLiveProducts(session.page || 1);
             }
 
             const formattedHistory = session.history.map(h => ({ role: h.role, content: h.content }));
@@ -226,6 +239,10 @@ router.post('/', async (req, res) => {
 
             await sendTextMessage(waId, reply);
             
+            await sendInteractiveButtons(waId, "Want to see more options?", [
+              { id: "more_options", title: "Show more options" }
+            ]);
+
             session.history.push({ role: 'assistant', content: reply });
             session.history = trimHistory(session.history, 6);
             session.lastActive = new Date();
@@ -236,7 +253,24 @@ router.post('/', async (req, res) => {
           // Step 5+: Normal conversation using AI
           if (session.step >= 5) {
             console.log(`➡️ [Webhook] Calling AI service for follow-up: ${waId}`);
-            let allProducts = await getLiveProducts();
+
+            if (buttonId === 'more_options') {
+              session.page = (session.page || 1) + 1;
+              userText = "Please show me 5-6 more different laptop options for my use case and budget.";
+            }
+
+            let maxBudget = null;
+            let minBudget = null;
+            if (session.budgetRange === 'under_20k') maxBudget = 20000;
+            else if (session.budgetRange === '20k_25k') { minBudget = 20000; maxBudget = 25000; }
+            else if (session.budgetRange === 'above_25k') minBudget = 25000;
+            
+            let allProducts = [];
+            if (maxBudget || minBudget) {
+                allProducts = await getProductsByBudget(minBudget, maxBudget, session.page || 1);
+            } else {
+                allProducts = await getLiveProducts(session.page || 1);
+            }
             
             const formattedHistory = session.history.map(h => ({ role: h.role, content: h.content }));
             const { reply, action } = await processMessage(userText, formattedHistory, allProducts);
@@ -248,6 +282,10 @@ router.post('/', async (req, res) => {
             
             await sendTextMessage(waId, reply);
             
+            await sendInteractiveButtons(waId, "Want to see more options?", [
+              { id: "more_options", title: "Show more options" }
+            ]);
+
             session.history.push({ role: 'assistant', content: reply });
             session.history = trimHistory(session.history, 6);
             session.lastActive = new Date();

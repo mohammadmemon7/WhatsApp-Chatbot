@@ -12,6 +12,7 @@ const sessionSchema = new mongoose.Schema({
   useCase: { type: String },
   budgetRange: { type: String },
   step: { type: Number, default: 1 },
+  page: { type: Number, default: 1 },
   lastActive: { type: Date, default: Date.now }
 }, {
   timestamps: true
