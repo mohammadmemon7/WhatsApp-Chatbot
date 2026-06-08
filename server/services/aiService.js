@@ -67,7 +67,7 @@ CRITICAL RULES:
 AVAILABLE PRODUCTS:
 ${productsContext}`;
 
-  const messages = [{ role: 'system', content: systemPrompt }, ...history];
+  const messages = [{ role: 'system', content: systemPrompt }, ...history, { role: 'user', content: userMessage }];
 
   try {
     const response = await axios.post(

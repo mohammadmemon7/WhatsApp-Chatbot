@@ -206,7 +206,10 @@ router.post('/', async (req, res) => {
             if (buttonId && buttonId.startsWith('budget_')) {
               session.budgetRange = buttonId.replace('budget_', '');
             } else {
-              session.budgetRange = userText;
+              let text = userText.toLowerCase();
+              if (text.includes('under') || (text.includes('20') && !text.includes('25'))) session.budgetRange = 'under_20k';
+              else if (text.includes('above') || (text.includes('25') && !text.includes('20'))) session.budgetRange = 'above_25k';
+              else session.budgetRange = '20k_25k';
             }
             
             session.step = 5;
@@ -218,9 +221,10 @@ router.post('/', async (req, res) => {
             
             let maxBudget = null;
             let minBudget = null;
-            if (session.budgetRange === 'under_20k') maxBudget = 20000;
-            else if (session.budgetRange === '20k_25k') { minBudget = 20000; maxBudget = 25000; }
-            else if (session.budgetRange === 'above_25k') minBudget = 25000;
+            const bRange = (session.budgetRange || '').toLowerCase();
+            if (bRange === 'under_20k' || bRange.includes('under') || (bRange.includes('20') && !bRange.includes('25'))) maxBudget = 20000;
+            else if (bRange === 'above_25k' || bRange.includes('above') || (bRange.includes('25') && !bRange.includes('20'))) minBudget = 25000;
+            else { minBudget = 20000; maxBudget = 25000; }
             
             let allProducts = [];
             if (maxBudget || minBudget) {
@@ -261,9 +265,10 @@ router.post('/', async (req, res) => {
 
             let maxBudget = null;
             let minBudget = null;
-            if (session.budgetRange === 'under_20k') maxBudget = 20000;
-            else if (session.budgetRange === '20k_25k') { minBudget = 20000; maxBudget = 25000; }
-            else if (session.budgetRange === 'above_25k') minBudget = 25000;
+            const bRange = (session.budgetRange || '').toLowerCase();
+            if (bRange === 'under_20k' || bRange.includes('under') || (bRange.includes('20') && !bRange.includes('25'))) maxBudget = 20000;
+            else if (bRange === 'above_25k' || bRange.includes('above') || (bRange.includes('25') && !bRange.includes('20'))) minBudget = 25000;
+            else { minBudget = 20000; maxBudget = 25000; }
             
             let allProducts = [];
             if (maxBudget || minBudget) {
