@@ -121,8 +121,10 @@ router.post('/', async (req, res) => {
             await session.save();
           }
 
-          // Step 1: Any first message from user
-          if (session.history.length === 0 || session.step === 1) {
+          // Step 1: Any first message from user (new session only — not after category reset)
+          // NOTE: After action_category reset, step=2 and history has a placeholder,
+          //       so this block does NOT fire and falls through directly to Step 2 handler.
+          if (session.history.length === 0 || (session.step === 1 && !buttonId?.startsWith('cat_'))) {
             session.history.push({ role: 'user', content: userText });
             session.step = 2;
             session.lastActive = new Date();
@@ -270,11 +272,14 @@ router.post('/', async (req, res) => {
 
             // FIX 6: Change Category button - reset and show welcome buttons
             if (buttonId === 'action_category') {
-              session.step = 1;
+              // Set step=2 (not 1) so that next button click goes straight to Step 2 handler.
+              // Add a placeholder history entry so session.history.length > 0,
+              // preventing the new-session Step 1 check from re-firing.
+              session.step = 2;
               session.category = null;
               session.useCase = null;
               session.budgetRange = null;
-              session.history = [];
+              session.history = [{ role: 'assistant', content: 'category_reset' }];
               session.page = 1;
               await session.save();
               await sendInteractiveButtons(waId,
@@ -287,9 +292,11 @@ router.post('/', async (req, res) => {
             }
 
             // Handle Call Now button
+            // Send number in plain international format (no spaces, no markdown)
+            // so WhatsApp auto-detects it as a tappable dial link.
             if (buttonId === 'action_call') {
               await sendTextMessage(waId,
-                "📞 Call us now: *+91 96196 11144*\nWe're happy to help! 😊"
+                "📞 Tap the number below to call us:\n+919619611144\nWe're happy to help! 😊"
               );
               continue;
             }
