@@ -294,16 +294,35 @@ router.post('/', async (req, res) => {
               continue;
             }
 
-            // FIX 5: More Options button - use same budget/useCase from session
+            // More Options button - use same budget/useCase from session
             if (buttonId === 'action_more') {
               session.page = (session.page || 1) + 1;
               await session.save();
 
-              // FIX 4: Acknowledge the button click
+              // Acknowledge the button click
               await sendTextMessage(waId, `✅ Selected: ${userText}`);
 
               const moreProducts = await fetchProductsForSession(session);
-              const morePrompt = `Show me more different laptop options for ${session.useCase || 'general'} use`;
+
+              // If WooCommerce returned no products, send apology — no fake AI data
+              if (!moreProducts || moreProducts.length === 0) {
+                await sendTextMessage(waId,
+                  "😔 Sorry, we don't have more options in this budget range right now.\n\n" +
+                  "For more choices, please reach out to us directly:\n" +
+                  "📞 *+91 96196 11144*\n" +
+                  "Our team will find the perfect laptop for you! 😊"
+                );
+                // Show limited buttons — no 'More Options' since nothing left
+                await sendInteractiveButtons(waId, "What would you like to do?", [
+                  { id: "action_call", title: "📞 Call Now" },
+                  { id: "action_category", title: "🔄 Change Category" }
+                ]);
+                session.lastActive = new Date();
+                await session.save();
+                continue;
+              }
+
+              const morePrompt = `Show me more different laptop options for ${session.useCase || 'general'} use. IMPORTANT: Only use the products from the list I provided. Do not invent any products.`;
               const formattedHistory = session.history.map(h => ({ role: h.role, content: h.content }));
               const { reply, action } = await processMessage(morePrompt, formattedHistory, moreProducts);
               
