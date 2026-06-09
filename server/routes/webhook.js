@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Session = require('../models/Session');
 const Product = require('../models/Product');
-const { getLiveProducts, searchProducts, getProductsByBudget } = require('../services/woocommerceService');
+const { getLiveProducts, searchProducts, getProductsByBudget, getProductsAboveBudget } = require('../services/woocommerceService');
 const { processMessage } = require('../services/aiService');
 const { sendTextMessage, sendInteractiveButtons } = require('../services/whatsappService');
 const { notifyAgent } = require('../services/handoffService');
@@ -10,6 +10,27 @@ const { trimHistory } = require('../utils/sessionManager');
 require('dotenv').config();
 
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
+
+// Helper: send the 3 standard action buttons after a product list
+async function sendActionButtons(waId) {
+  await sendInteractiveButtons(waId, "Would you like to:", [
+    { id: "action_call", title: "📞 Call Now" },
+    { id: "action_more", title: "🔍 More Options" },
+    { id: "action_category", title: "🔄 Change Category" }
+  ]);
+}
+
+// Helper: fetch products based on stored budgetRange
+async function fetchProductsForSession(session) {
+  const bRange = (session.budgetRange || '').toLowerCase();
+  if (bRange === 'under_20k' || bRange.includes('under') || (bRange.includes('20') && !bRange.includes('25'))) {
+    return await getProductsByBudget(null, 20000, session.page || 1);
+  } else if (bRange === 'above_25k' || bRange.includes('above') || (bRange.includes('25') && !bRange.includes('20'))) {
+    return await getProductsAboveBudget(25000, session.page || 1);
+  } else {
+    return await getProductsByBudget(20000, 25000, session.page || 1);
+  }
+}
 
 // Webhook Verification (GET)
 router.get('/', (req, res) => {
@@ -118,8 +139,6 @@ router.post('/', async (req, res) => {
 
           // Step 99: Conversation ended (CCTV/AMC selected)
           if (session.step === 99) {
-            // If user clicked a new category button, 
-            // reset and let them continue
             if (buttonId && buttonId.startsWith('cat_')) {
               session.step = 2;
               session.category = null;
@@ -213,25 +232,15 @@ router.post('/', async (req, res) => {
             }
             
             session.step = 5;
+            session.page = 1;
             await session.save();
             
             const aiPrompt = `User is looking for a refurbished laptop for ${session.useCase || 'general use'}. Their budget is ${session.budgetRange || 'flexible'}. Please suggest 5-6 relevant products with links.`;
             
             console.log(`➡️ [Webhook] Calling AI service for products: ${aiPrompt}`);
             
-            let maxBudget = null;
-            let minBudget = null;
-            const bRange = (session.budgetRange || '').toLowerCase();
-            if (bRange === 'under_20k' || bRange.includes('under') || (bRange.includes('20') && !bRange.includes('25'))) maxBudget = 20000;
-            else if (bRange === 'above_25k' || bRange.includes('above') || (bRange.includes('25') && !bRange.includes('20'))) minBudget = 25000;
-            else { minBudget = 20000; maxBudget = 25000; }
-            
-            let allProducts = [];
-            if (maxBudget || minBudget) {
-                allProducts = await getProductsByBudget(minBudget, maxBudget, session.page || 1);
-            } else {
-                allProducts = await getLiveProducts(session.page || 1);
-            }
+            // FIX 3: Use correct fetch function based on budgetRange
+            const allProducts = await fetchProductsForSession(session);
 
             const formattedHistory = session.history.map(h => ({ role: h.role, content: h.content }));
             const { reply, action } = await processMessage(aiPrompt, formattedHistory, allProducts);
@@ -241,11 +250,12 @@ router.post('/', async (req, res) => {
               session.status = 'handed_off';
             }
 
+            // FIX 4: Send acknowledgment of selection
+            await sendTextMessage(waId, `✅ Selected: ${userText}`);
             await sendTextMessage(waId, reply);
             
-            await sendInteractiveButtons(waId, "Want to see more options?", [
-              { id: "more_options", title: "Show more options" }
-            ]);
+            // FIX 1: Send 3 action buttons after product list
+            await sendActionButtons(waId);
 
             session.history.push({ role: 'assistant', content: reply });
             session.history = trimHistory(session.history, 6);
@@ -254,28 +264,68 @@ router.post('/', async (req, res) => {
             continue;
           }
 
-          // Step 5+: Normal conversation using AI
+          // Step 5+: Action button handlers + Normal AI conversation
           if (session.step >= 5) {
+            console.log(`➡️ [Webhook] Step 5+ handler for: ${waId}, buttonId: ${buttonId}`);
+
+            // FIX 6: Change Category button - reset and show welcome buttons
+            if (buttonId === 'action_category') {
+              session.step = 1;
+              session.category = null;
+              session.useCase = null;
+              session.budgetRange = null;
+              session.history = [];
+              session.page = 1;
+              await session.save();
+              await sendInteractiveButtons(waId,
+                "Welcome to MyLaptop! 👋\nWhat are you looking for?", [
+                { id: "cat_laptops", title: "💻 Laptops" },
+                { id: "cat_cctv", title: "📷 CCTV & Security" },
+                { id: "cat_amc", title: "🔧 AMC & Services" }
+              ]);
+              continue;
+            }
+
+            // Handle Call Now button
+            if (buttonId === 'action_call') {
+              await sendTextMessage(waId,
+                "📞 Call us now: *+91 96196 11144*\nWe're happy to help! 😊"
+              );
+              continue;
+            }
+
+            // FIX 5: More Options button - use same budget/useCase from session
+            if (buttonId === 'action_more') {
+              session.page = (session.page || 1) + 1;
+              await session.save();
+
+              // FIX 4: Acknowledge the button click
+              await sendTextMessage(waId, `✅ Selected: ${userText}`);
+
+              const moreProducts = await fetchProductsForSession(session);
+              const morePrompt = `Show me more different laptop options for ${session.useCase || 'general'} use`;
+              const formattedHistory = session.history.map(h => ({ role: h.role, content: h.content }));
+              const { reply, action } = await processMessage(morePrompt, formattedHistory, moreProducts);
+              
+              if (action === 'handoff') {
+                notifyAgent(waId, name, userText);
+                session.status = 'handed_off';
+              }
+
+              await sendTextMessage(waId, reply);
+              await sendActionButtons(waId);
+
+              session.history.push({ role: 'assistant', content: reply });
+              session.history = trimHistory(session.history, 6);
+              session.lastActive = new Date();
+              await session.save();
+              continue;
+            }
+
+            // Normal free-text AI conversation
             console.log(`➡️ [Webhook] Calling AI service for follow-up: ${waId}`);
 
-            if (buttonId === 'more_options') {
-              session.page = (session.page || 1) + 1;
-              userText = "Please show me 5-6 more different laptop options for my use case and budget.";
-            }
-
-            let maxBudget = null;
-            let minBudget = null;
-            const bRange = (session.budgetRange || '').toLowerCase();
-            if (bRange === 'under_20k' || bRange.includes('under') || (bRange.includes('20') && !bRange.includes('25'))) maxBudget = 20000;
-            else if (bRange === 'above_25k' || bRange.includes('above') || (bRange.includes('25') && !bRange.includes('20'))) minBudget = 25000;
-            else { minBudget = 20000; maxBudget = 25000; }
-            
-            let allProducts = [];
-            if (maxBudget || minBudget) {
-                allProducts = await getProductsByBudget(minBudget, maxBudget, session.page || 1);
-            } else {
-                allProducts = await getLiveProducts(session.page || 1);
-            }
+            const allProducts = await fetchProductsForSession(session);
             
             const formattedHistory = session.history.map(h => ({ role: h.role, content: h.content }));
             const { reply, action } = await processMessage(userText, formattedHistory, allProducts);
@@ -286,10 +336,7 @@ router.post('/', async (req, res) => {
             }
             
             await sendTextMessage(waId, reply);
-            
-            await sendInteractiveButtons(waId, "Want to see more options?", [
-              { id: "more_options", title: "Show more options" }
-            ]);
+            await sendActionButtons(waId);
 
             session.history.push({ role: 'assistant', content: reply });
             session.history = trimHistory(session.history, 6);
