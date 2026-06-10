@@ -71,7 +71,7 @@ async function getProductsByBudget(minBudget, maxBudget, page = 1) {
             consumer_secret: WC_CONSUMER_SECRET,
             status: 'publish',
             stock_status: 'instock',
-            per_page: 6,
+            per_page: 10,
             page: page
         };
         if (maxBudget) params.max_price = maxBudget;
@@ -81,6 +81,26 @@ async function getProductsByBudget(minBudget, maxBudget, page = 1) {
         return response.data.map(mapProduct);
     } catch (error) {
         console.error('Exact error fetching products by budget:', error);
+        return [];
+    }
+}
+
+async function getProductsByBudgetPage(maxBudget, page = 1) {
+    try {
+        const params = {
+            consumer_key: WC_CONSUMER_KEY,
+            consumer_secret: WC_CONSUMER_SECRET,
+            status: 'publish',
+            stock_status: 'instock',
+            per_page: 6,
+            page: page
+        };
+        if (maxBudget) params.max_price = maxBudget;
+
+        const response = await axios.get(BASE_URL, { params });
+        return response.data.map(mapProduct);
+    } catch (error) {
+        console.error('Exact error fetching products by budget page:', error);
         return [];
     }
 }
@@ -118,5 +138,6 @@ module.exports = {
     getLiveProducts,
     searchProducts,
     getProductsByBudget,
+    getProductsByBudgetPage,
     getProductsAboveBudget
 };

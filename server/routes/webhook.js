@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Session = require('../models/Session');
 const Product = require('../models/Product');
-const { getLiveProducts, searchProducts, getProductsByBudget, getProductsAboveBudget } = require('../services/woocommerceService');
+const { getLiveProducts, searchProducts, getProductsByBudget, getProductsByBudgetPage, getProductsAboveBudget } = require('../services/woocommerceService');
 const { processMessage } = require('../services/aiService');
 const { sendTextMessage, sendInteractiveButtons } = require('../services/whatsappService');
 const { notifyAgent } = require('../services/handoffService');
@@ -23,12 +23,13 @@ async function sendActionButtons(waId) {
 // Helper: fetch products based on stored budgetRange
 async function fetchProductsForSession(session) {
   const bRange = (session.budgetRange || '').toLowerCase();
+  const pageToUse = session.productPage || 1;
   if (bRange === 'under_20k' || bRange.includes('under') || (bRange.includes('20') && !bRange.includes('25'))) {
-    return await getProductsByBudget(null, 20000, session.page || 1);
+    return await getProductsByBudget(null, 20000, pageToUse);
   } else if (bRange === 'above_25k' || bRange.includes('above') || (bRange.includes('25') && !bRange.includes('20'))) {
-    return await getProductsAboveBudget(25000, session.page || 1);
+    return await getProductsAboveBudget(25000, pageToUse);
   } else {
-    return await getProductsByBudget(20000, 25000, session.page || 1);
+    return await getProductsByBudget(20000, 25000, pageToUse);
   }
 }
 
@@ -234,7 +235,7 @@ router.post('/', async (req, res) => {
             }
             
             session.step = 5;
-            session.page = 1;
+            session.productPage = 1;
             await session.save();
             
             const aiPrompt = `User is looking for a refurbished laptop for ${session.useCase || 'general use'}. Their budget is ${session.budgetRange || 'flexible'}. Please suggest 5-6 relevant products with links.`;
@@ -280,7 +281,7 @@ router.post('/', async (req, res) => {
               session.useCase = null;
               session.budgetRange = null;
               session.history = [{ role: 'assistant', content: 'category_reset' }];
-              session.page = 1;
+              session.productPage = 1;
               await session.save();
               await sendInteractiveButtons(waId,
                 "Welcome to MyLaptop! 👋\nWhat are you looking for?", [
@@ -303,21 +304,34 @@ router.post('/', async (req, res) => {
 
             // More Options button - use same budget/useCase from session
             if (buttonId === 'action_more') {
-              session.page = (session.page || 1) + 1;
+              session.productPage = session.productPage || 1;
+              session.productPage += 1;
               await session.save();
 
               // Acknowledge the button click
               await sendTextMessage(waId, `✅ Selected: ${userText}`);
 
-              const moreProducts = await fetchProductsForSession(session);
+              let maxBudget = null;
+              const bRange = (session.budgetRange || '').toLowerCase();
+              if (bRange === 'under_20k' || bRange.includes('under') || (bRange.includes('20') && !bRange.includes('25'))) {
+                maxBudget = 20000;
+              } else if (bRange === 'above_25k' || bRange.includes('above') || (bRange.includes('25') && !bRange.includes('20'))) {
+                maxBudget = null;
+              } else {
+                maxBudget = 25000;
+              }
+
+              let moreProducts;
+              if (bRange === 'above_25k' || bRange.includes('above') || (bRange.includes('25') && !bRange.includes('20'))) {
+                moreProducts = await getProductsAboveBudget(25000, session.productPage);
+              } else {
+                moreProducts = await getProductsByBudgetPage(maxBudget, session.productPage);
+              }
 
               // If WooCommerce returned no products, send apology — no fake AI data
               if (!moreProducts || moreProducts.length === 0) {
                 await sendTextMessage(waId,
-                  "😔 Sorry, we don't have more options in this budget range right now.\n\n" +
-                  "For more choices, please reach out to us directly:\n" +
-                  "📞 *+91 96196 11144*\n" +
-                  "Our team will find the perfect laptop for you! 😊"
+                  "No more options in this budget.\n📞 Call us: *+91 96196 11144*\nWe'll find the perfect laptop for you! 😊"
                 );
                 // Show limited buttons — no 'More Options' since nothing left
                 await sendInteractiveButtons(waId, "What would you like to do?", [
